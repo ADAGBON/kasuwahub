@@ -90,7 +90,9 @@ const garments = {
 
 export default function FabricArt({ product, className = '' }) {
   const uid = useId().replace(/:/g, '')
-  const [a, b, c] = product.palette
+  const photo = product.images?.[0]?.url || product.image
+  if (photo) return <img src={photo} alt={product.name} loading="lazy" className={`object-cover ${className}`} />
+  const [a, b, c] = product.palette?.length ? product.palette : ['#1f2a5c', '#e8a33d', '#faf5ec']
   const patternId = `p-${uid}`
   const shadeId = `s-${uid}`
   const garment = garments[product.garment]

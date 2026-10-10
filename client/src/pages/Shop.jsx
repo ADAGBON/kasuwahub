@@ -1,11 +1,10 @@
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
-import { categories, products, getCategory } from '../data/products'
+import { categories, getCategory } from '../data/products'
+import { useApi } from '../api/hooks'
 import ProductCard from '../components/ProductCard'
-import { matchesQuery } from '../components/SearchBar'
+import { ErrorBox, GridSkeleton } from '../components/Status'
 import { CloseIcon, FilterIcon } from '../components/Icons'
-
-const FABRICS = ['ankara', 'aso-oke', 'lace', 'adire']
 
 const priceBands = [
   { id: 'u10', label: 'Under ₦10,000', min: 0, max: 10000 },
@@ -14,10 +13,11 @@ const priceBands = [
 ]
 
 const sorts = {
-  popular: { label: 'Most popular', fn: (a, b) => b.reviews - a.reviews },
-  'price-asc': { label: 'Price: low to high', fn: (a, b) => a.price - b.price },
-  'price-desc': { label: 'Price: high to low', fn: (a, b) => b.price - a.price },
-  rating: { label: 'Top rated', fn: (a, b) => b.rating - a.rating },
+  popular: { label: 'Most popular' },
+  'price-asc': { label: 'Price: low to high' },
+  'price-desc': { label: 'Price: high to low' },
+  rating: { label: 'Top rated' },
+  newest: { label: 'Newest' },
 }
 
 export default function Shop() {
@@ -27,25 +27,27 @@ export default function Shop() {
   const q = params.get('q') ?? ''
   const category = params.get('category') ?? 'all'
   const band = params.get('price') ?? ''
-  const minPrice = Number(params.get('min')) || 0
-  const maxPrice = Number(params.get('max')) || Infinity
+  const page = Number(params.get('page')) || 1
   const sort = sorts[params.get('sort')] ? params.get('sort') : 'popular'
 
   const update = (changes) => {
     const next = new URLSearchParams(params)
+    if (!('page' in changes)) next.delete('page') // any filter change goes back to page 1
     Object.entries(changes).forEach(([k, v]) => (v === '' || v == null ? next.delete(k) : next.set(k, v)))
     setParams(next, { replace: true })
   }
 
-  const results = useMemo(() => {
-    const activeBand = priceBands.find((b) => b.id === band)
-    return products
-      .filter((p) => category === 'all' || (category === 'fabrics' ? FABRICS.includes(p.category) : p.category === category))
-      .filter((p) => matchesQuery(p, q))
-      .filter((p) => !activeBand || (p.price >= activeBand.min && p.price < activeBand.max))
-      .filter((p) => p.price >= minPrice && p.price <= maxPrice)
-      .sort(sorts[sort].fn)
-  }, [q, category, band, minPrice, maxPrice, sort])
+  // Filtering, search, sorting and paging all happen on the server
+  const activeBand = priceBands.find((b) => b.id === band)
+  const query = {
+    q, category, sort, page, limit: 12,
+    minPrice: activeBand ? activeBand.min : params.get('min'),
+    maxPrice: activeBand ? (Number.isFinite(activeBand.max) ? activeBand.max - 1 : '') : params.get('max'),
+  }
+  const { data, error, loading, reload } = useApi('/products', query)
+  const { data: counts } = useApi('/products/categories')
+  const results = data?.items ?? []
+  const total = data?.total ?? 0
 
   const heading = q ? `Results for “${q}”` : category === 'fabrics' ? 'All fabrics' : getCategory(category)?.name ?? 'All products'
   const activeFilters = [
@@ -67,7 +69,7 @@ export default function Shop() {
               <input type="radio" name="category" className="sr-only" checked={category === c.slug} onChange={() => update({ category: c.slug === 'all' ? '' : c.slug })} />
               {c.name}
               <span className={`ml-auto text-xs ${category === c.slug ? 'text-white/70' : 'text-muted'}`}>
-                {c.slug === 'all' ? products.length : c.slug === 'fabrics' ? products.filter((p) => FABRICS.includes(p.category)).length : products.filter((p) => p.category === c.slug).length}
+                {counts?.[c.slug] ?? ''}
               </span>
             </label>
           ))}
@@ -117,7 +119,7 @@ export default function Shop() {
       <div className="mt-3 flex flex-wrap items-end justify-between gap-4">
         <div>
           <h1 className="font-display text-3xl font-bold text-indigo-ink sm:text-4xl">{heading}</h1>
-          <p className="mt-1 text-sm text-muted" aria-live="polite">{results.length} {results.length === 1 ? 'item' : 'items'}</p>
+          <p className="mt-1 text-sm text-muted" aria-live="polite">{loading ? 'Loading…' : `${total} ${total === 1 ? 'item' : 'items'}`}</p>
         </div>
         <div className="flex items-center gap-2">
           <button onClick={() => setFiltersOpen(true)} className="flex items-center gap-2 rounded-full border border-black/10 bg-white px-4 py-2 text-sm font-semibold lg:hidden">
@@ -144,10 +146,23 @@ export default function Shop() {
         <aside className="hidden lg:block">{filterPanel}</aside>
 
         <section aria-label="Products">
-          {results.length ? (
-            <div className="grid grid-cols-2 gap-3 sm:gap-5 md:grid-cols-3">
-              {results.map((p) => <ProductCard key={p.id} product={p} />)}
-            </div>
+          {error ? (
+            <ErrorBox error={error} onRetry={reload} />
+          ) : loading && !data ? (
+            <GridSkeleton count={6} cols="md:grid-cols-3" />
+          ) : results.length ? (
+            <>
+              <div className={`grid grid-cols-2 gap-3 transition-opacity sm:gap-5 md:grid-cols-3 ${loading ? 'opacity-60' : ''}`}>
+                {results.map((p) => <ProductCard key={p.id} product={p} />)}
+              </div>
+              {data.pages > 1 && (
+                <nav className="mt-10 flex items-center justify-center gap-2" aria-label="Pagination">
+                  <button disabled={page <= 1} onClick={() => update({ page: page - 1 })} className="rounded-full border border-black/10 bg-white px-4 py-2 text-sm font-semibold disabled:opacity-40">← Prev</button>
+                  <span className="px-3 text-sm text-muted">Page {page} of {data.pages}</span>
+                  <button disabled={page >= data.pages} onClick={() => update({ page: page + 1 })} className="rounded-full border border-black/10 bg-white px-4 py-2 text-sm font-semibold disabled:opacity-40">Next →</button>
+                </nav>
+              )}
+            </>
           ) : (
             <div className="rounded-3xl bg-white px-6 py-16 text-center ring-1 ring-black/5">
               <p className="font-display text-2xl font-bold text-indigo-ink">No products found</p>
@@ -168,7 +183,7 @@ export default function Shop() {
               <button onClick={() => setFiltersOpen(false)} className="rounded-full p-2 hover:bg-sand" aria-label="Close filters"><CloseIcon /></button>
             </div>
             {filterPanel}
-            <button onClick={() => setFiltersOpen(false)} className="btn btn-primary mt-8 w-full">Show {results.length} results</button>
+            <button onClick={() => setFiltersOpen(false)} className="btn btn-primary mt-8 w-full">Show {total} results</button>
           </div>
         </div>
       )}

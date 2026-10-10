@@ -1,19 +1,41 @@
 import { useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, Navigate, useNavigate, useSearchParams } from 'react-router-dom'
+import { useAuth } from '../context/AuthContext'
 import AuthLayout from './AuthLayout'
 
-export default function Login() {
-  const [errors, setErrors] = useState({})
-  const [status, setStatus] = useState('')
+// only allow in-app redirects (prevents open redirects via ?next=https://evil…)
+export const safeNext = (next) => (next && next.startsWith('/') && !next.startsWith('//') ? next : '/')
 
-  const onSubmit = (e) => {
+export default function Login() {
+  const { login, user } = useAuth()
+  const [params] = useSearchParams()
+  const navigate = useNavigate()
+  const next = safeNext(params.get('next'))
+  const [errors, setErrors] = useState({})
+  const [error, setError] = useState('')
+  const [busy, setBusy] = useState(false)
+
+  if (user && !busy) return <Navigate to={next} replace />
+
+  const onSubmit = async (e) => {
     e.preventDefault()
     const fd = new FormData(e.currentTarget)
-    const next = {}
-    if (!/^\S+@\S+\.\S+$/.test(fd.get('email'))) next.email = 'Enter a valid email address'
-    if (!fd.get('password')) next.password = 'Enter your password'
-    setErrors(next)
-    setStatus(Object.keys(next).length ? '' : 'Looks good! Sign-in connects to the JWT API in Phase 2.')
+    const email = String(fd.get('email')).trim()
+    const password = String(fd.get('password'))
+    const v = {}
+    if (!/^\S+@\S+\.\S+$/.test(email)) v.email = 'Enter a valid email address'
+    if (!password) v.password = 'Enter your password'
+    setErrors(v)
+    if (Object.keys(v).length) return
+    setBusy(true)
+    setError('')
+    try {
+      await login(email, password)
+      navigate(next, { replace: true })
+    } catch (err) {
+      setError(err.message)
+      setBusy(false)
+    }
   }
 
   return (
@@ -21,10 +43,10 @@ export default function Login() {
       <form onSubmit={onSubmit} noValidate className="mt-8 space-y-5">
         <Field label="Email" name="email" type="email" autoComplete="email" error={errors.email} />
         <Field label="Password" name="password" type="password" autoComplete="current-password" error={errors.password} />
-        <button className="btn btn-dark w-full">Sign in</button>
-        {status && <p className="rounded-xl bg-sand p-3 text-sm" role="status">{status}</p>}
+        {error && <p className="rounded-xl bg-terracotta/10 p-3 text-sm font-semibold text-terracotta" role="alert">{error}</p>}
+        <button disabled={busy} className="btn btn-dark w-full disabled:opacity-60">{busy ? 'Signing in…' : 'Sign in'}</button>
         <p className="text-center text-sm text-muted">
-          New to KasuwaHub? <Link to="/register" className="font-semibold text-terracotta hover:underline">Create an account</Link>
+          New to KasuwaHub? <Link to={`/register${params.get('next') ? `?next=${encodeURIComponent(next)}` : ''}`} className="font-semibold text-terracotta hover:underline">Create an account</Link>
         </p>
       </form>
     </AuthLayout>

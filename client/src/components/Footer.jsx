@@ -38,7 +38,7 @@ export default function Footer() {
       <div className="border-t border-white/10">
         <div className="container-page flex flex-col gap-2 py-5 text-xs sm:flex-row sm:justify-between">
           <p>© {new Date().getFullYear()} KasuwaHub. Built in Lagos.</p>
-          <p>Lab Phase project · Phase 1 UI</p>
+          <p>Lab Phase project · Phase 2</p>
         </div>
       </div>
     </footer>

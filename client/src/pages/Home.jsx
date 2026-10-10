@@ -1,18 +1,24 @@
 import { Link } from 'react-router-dom'
-import { categories, products, deliveryZones } from '../data/products'
+import { categories, deliveryZones } from '../data/products'
+import { useApi } from '../api/hooks'
 import ProductCard from '../components/ProductCard'
 import FabricArt from '../components/FabricArt'
+import { GridSkeleton } from '../components/Status'
 import { ArrowIcon, ShieldIcon, StoreIcon, TruckIcon } from '../components/Icons'
 import { formatNaira } from '../utils/format'
 
-const heroPicks = ['ank-001', 'aso-001', 'adi-001', 'lac-001'].map((id) => products.find((p) => p.id === id))
-
-// one representative product per category for the category tiles
-const categoryArt = Object.fromEntries(categories.map((c) => [c.slug, products.find((p) => p.category === c.slug)]))
+// Placeholder art while products load
+const placeholder = { name: '', pattern: 'plain', palette: ['#f1e7d6', '#e8dcc6', '#faf5ec'] }
 
 export default function Home() {
-  const featured = [...products].sort((a, b) => b.reviews - a.reviews).slice(0, 8)
+  const { data, error } = useApi('/products', { limit: 60, sort: 'popular' })
+  const products = data?.items ?? []
+  const loading = !data && !error
+
+  const featured = products.slice(0, 8)
   const readyMade = products.filter((p) => p.category === 'ready-made').slice(0, 4)
+  const heroPicks = ['ankara', 'aso-oke', 'adire', 'lace'].map((c) => products.find((p) => p.category === c)).filter(Boolean)
+  const categoryArt = Object.fromEntries(categories.map((c) => [c.slug, products.find((p) => p.category === c.slug) ?? placeholder]))
 
   return (
     <>
@@ -41,10 +47,13 @@ export default function Home() {
           </div>
 
           <div className="relative mx-auto grid w-full max-w-md grid-cols-2 gap-3 sm:gap-4">
+            {!heroPicks.length && [0, 1, 2, 3].map((i) => (
+              <div key={i} className={`aspect-[4/5] animate-pulse rounded-3xl bg-sand ${i % 2 ? 'translate-y-6' : ''}`} />
+            ))}
             {heroPicks.map((p, i) => (
               <Link
                 key={p.id}
-                to={`/product/${p.id}`}
+                to={`/product/${p.slug}`}
                 className={`group relative overflow-hidden rounded-3xl shadow-lg ring-1 ring-black/5 ${i % 2 ? 'translate-y-6' : ''}`}
               >
                 <FabricArt product={p} className="aspect-[4/5] h-full w-full transition duration-500 group-hover:scale-105" />
@@ -101,6 +110,8 @@ export default function Home() {
         <div className="mt-8 grid grid-cols-2 gap-3 sm:gap-5 md:grid-cols-3 lg:grid-cols-4">
           {featured.map((p) => <ProductCard key={p.id} product={p} />)}
         </div>
+        {loading && <GridSkeleton count={8} />}
+        {error && <p className="rounded-2xl bg-white p-6 text-center text-muted ring-1 ring-black/5">Products are unavailable right now — {error.message}</p>}
       </section>
 
       {/* Promo banner */}
@@ -124,6 +135,7 @@ export default function Home() {
         <div className="mt-8 grid grid-cols-2 gap-3 sm:gap-5 md:grid-cols-4">
           {readyMade.map((p) => <ProductCard key={p.id} product={p} />)}
         </div>
+        {loading && <GridSkeleton count={4} cols="md:grid-cols-4" />}
       </section>
 
       {/* Delivery zones */}

@@ -1,7 +1,9 @@
 import { useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { getCategory, getProduct, products, deliveryZones } from '../data/products'
+import { getCategory, deliveryZones } from '../data/products'
+import { useApi } from '../api/hooks'
 import { useCart } from '../context/CartContext'
+import { ErrorBox, Spinner } from '../components/Status'
 import FabricArt from '../components/FabricArt'
 import ProductCard from '../components/ProductCard'
 import { ShieldIcon, StarIcon, StoreIcon, TruckIcon } from '../components/Icons'
@@ -9,38 +11,49 @@ import { formatNaira, unitLabel } from '../utils/format'
 import NotFound from './NotFound'
 
 export default function ProductDetail() {
-  const { id } = useParams()
-  const product = getProduct(id)
+  const { slug } = useParams()
+  const { data, error, loading, reload } = useApi(`/products/${encodeURIComponent(slug)}`)
+  if (error?.status === 404) return <NotFound />
+  if (error) return <div className="container-page py-12"><ErrorBox error={error} onRetry={reload} /></div>
+  if (loading || !data) return <Spinner label="Loading product…" />
   // key forces fresh state (qty, size) when navigating between products
-  return product ? <ProductView key={product.id} product={product} /> : <NotFound />
+  return <ProductView key={data.product.id} product={data.product} related={data.related} />
 }
 
-function ProductView({ product }) {
+function ProductView({ product, related }) {
   const { addItem } = useCart()
   const [qty, setQty] = useState(product.minQty)
   const [size, setSize] = useState(null)
   const [error, setError] = useState('')
   const [added, setAdded] = useState(false)
   const category = getCategory(product.category)
-  const related = products.filter((p) => p.category === product.category && p.id !== product.id).slice(0, 4)
+  const [busy, setBusy] = useState(false)
+  const soldOut = product.stock < product.minQty
   const qtyLabel = product.unit === 'yard' ? 'Yards' : 'Quantity'
 
-  const handleAdd = () => {
-    if (product.sizes && !size) {
+  const handleAdd = async () => {
+    if (product.sizes?.length && !size) {
       setError('Please choose a size')
       return
     }
-    addItem(product, qty, size)
-    setError('')
-    setAdded(true)
-    setTimeout(() => setAdded(false), 2500)
+    setBusy(true)
+    try {
+      await addItem(product, qty, size)
+      setError('')
+      setAdded(true)
+      setTimeout(() => setAdded(false), 2500)
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setBusy(false)
+    }
   }
 
   return (
     <div className="container-page py-8 sm:py-12">
       <nav className="text-sm text-muted" aria-label="Breadcrumb">
         <Link to="/" className="hover:text-ink">Home</Link> <span aria-hidden="true">/</span>{' '}
-        <Link to={`/shop?category=${category.slug}`} className="hover:text-ink">{category.name}</Link> <span aria-hidden="true">/</span>{' '}
+        <Link to={`/shop?category=${category?.slug}`} className="hover:text-ink">{category?.name}</Link> <span aria-hidden="true">/</span>{' '}
         <span className="text-ink">{product.name}</span>
       </nav>
 
@@ -63,7 +76,7 @@ function ProductView({ product }) {
 
         {/* Info */}
         <div>
-          <p className="text-xs font-bold uppercase tracking-wider text-terracotta">{category.name}</p>
+          <p className="text-xs font-bold uppercase tracking-wider text-terracotta">{category?.name}</p>
           <h1 className="mt-2 font-display text-3xl font-bold leading-tight text-indigo-ink sm:text-4xl">{product.name}</h1>
 
           <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
@@ -79,10 +92,13 @@ function ProductView({ product }) {
             <span className="ml-2 text-muted">{unitLabel(product.unit)}</span>
           </p>
           {product.unit === 'yard' && <p className="mt-1 text-sm text-muted">Minimum order: {product.minQty} yards</p>}
+          <p className={`mt-2 text-sm font-semibold ${soldOut ? 'text-terracotta' : product.stock <= 5 ? 'text-[#8a5a0f]' : 'text-palm'}`}>
+            {soldOut ? 'Out of stock' : product.stock <= 5 ? `Only ${product.stock} left` : 'In stock'}
+          </p>
 
           <p className="mt-6 leading-relaxed text-ink/80">{product.description}</p>
 
-          {product.sizes && (
+          {product.sizes?.length > 0 && (
             <fieldset className="mt-8">
               <legend className="text-sm font-semibold">Size {size && <span className="font-normal text-muted">— {size}</span>}</legend>
               <div className="mt-3 flex flex-wrap gap-2">
@@ -102,11 +118,11 @@ function ProductView({ product }) {
               <div className="mt-2 flex items-center rounded-full border-2 border-black/10 bg-white">
                 <button type="button" onClick={() => setQty((q) => Math.max(product.minQty, q - 1))} className="grid h-11 w-11 place-items-center text-xl disabled:opacity-30" disabled={qty <= product.minQty} aria-label="Decrease">−</button>
                 <input id="qty" type="number" min={product.minQty} value={qty} onChange={(e) => setQty(Math.max(product.minQty, Number(e.target.value) || product.minQty))} className="w-12 bg-transparent text-center font-semibold focus:outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none" />
-                <button type="button" onClick={() => setQty((q) => q + 1)} className="grid h-11 w-11 place-items-center text-xl" aria-label="Increase">+</button>
+                <button type="button" onClick={() => setQty((q) => Math.min(product.stock, q + 1))} disabled={qty >= product.stock} className="grid h-11 w-11 place-items-center text-xl disabled:opacity-30" aria-label="Increase">+</button>
               </div>
             </div>
-            <button onClick={handleAdd} className="btn btn-primary h-[52px] flex-1 sm:flex-none sm:px-10">
-              {added ? 'Added to cart ✓' : `Add to cart · ${formatNaira(product.price * qty)}`}
+            <button onClick={handleAdd} disabled={busy || soldOut} className="btn btn-primary h-[52px] flex-1 disabled:cursor-not-allowed disabled:opacity-50 sm:flex-none sm:px-10">
+              {soldOut ? 'Sold out' : busy ? 'Adding…' : added ? 'Added to cart ✓' : `Add to cart · ${formatNaira(product.price * qty)}`}
             </button>
           </div>
           {error && <p className="mt-3 text-sm font-semibold text-terracotta" role="alert">{error}</p>}

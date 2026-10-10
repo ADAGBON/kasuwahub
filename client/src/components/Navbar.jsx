@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link, NavLink, useLocation } from 'react-router-dom'
 import { useCart } from '../context/CartContext'
+import { useAuth } from '../context/AuthContext'
 import { categories } from '../data/products'
 import SearchBar from './SearchBar'
 import { CartIcon, CloseIcon, MenuIcon, SearchIcon, UserIcon } from './Icons'
@@ -25,12 +26,14 @@ const navLinkClass = ({ isActive }) =>
 
 export default function Navbar() {
   const { count } = useCart()
+  const { user, isAdmin, logout } = useAuth()
   const [menuOpen, setMenuOpen] = useState(false)
+  const [accountOpen, setAccountOpen] = useState(false)
   const [searchOpen, setSearchOpen] = useState(false)
   const location = useLocation()
 
   // close mobile panels whenever the route changes
-  useEffect(() => { setMenuOpen(false); setSearchOpen(false) }, [location.pathname, location.search])
+  useEffect(() => { setMenuOpen(false); setSearchOpen(false); setAccountOpen(false) }, [location.pathname, location.search])
 
   useEffect(() => {
     document.body.style.overflow = menuOpen ? 'hidden' : ''
@@ -66,9 +69,29 @@ export default function Navbar() {
           <button className="rounded-full p-2 hover:bg-sand md:hidden" onClick={() => setSearchOpen((s) => !s)} aria-label="Search" aria-expanded={searchOpen}>
             <SearchIcon />
           </button>
-          <Link to="/login" className="rounded-full p-2 hover:bg-sand" aria-label="Account">
-            <UserIcon />
-          </Link>
+          {user ? (
+            <div className="relative">
+              <button onClick={() => setAccountOpen((o) => !o)} className="flex items-center gap-2 rounded-full p-2 hover:bg-sand" aria-label="Account menu" aria-expanded={accountOpen}>
+                <span className="grid h-7 w-7 place-items-center rounded-full bg-indigo-ink text-xs font-bold text-white">{user.name.charAt(0).toUpperCase()}</span>
+                <span className="hidden max-w-24 truncate text-sm font-semibold xl:inline">{user.name.split(' ')[0]}</span>
+              </button>
+              {accountOpen && (
+                <>
+                  <div className="fixed inset-0 z-40" onClick={() => setAccountOpen(false)} />
+                  <div className="absolute right-0 top-full z-50 mt-2 w-56 overflow-hidden rounded-2xl bg-white py-2 shadow-xl ring-1 ring-black/5">
+                    <p className="truncate px-4 pb-2 text-xs text-muted">{user.email}</p>
+                    <Link to="/orders" className="block px-4 py-2 text-sm font-semibold hover:bg-sand">My orders</Link>
+                    {isAdmin && <Link to="/admin" className="block px-4 py-2 text-sm font-semibold hover:bg-sand">Admin dashboard</Link>}
+                    <button onClick={() => { logout(); setAccountOpen(false) }} className="block w-full border-t border-black/5 px-4 py-2 text-left text-sm text-terracotta hover:bg-sand">Sign out</button>
+                  </div>
+                </>
+              )}
+            </div>
+          ) : (
+            <Link to="/login" className="rounded-full p-2 hover:bg-sand" aria-label="Sign in">
+              <UserIcon />
+            </Link>
+          )}
           <Link to="/cart" className="relative rounded-full p-2 hover:bg-sand" aria-label={`Cart, ${count} items`}>
             <CartIcon />
             {count > 0 && (
@@ -111,8 +134,18 @@ export default function Navbar() {
             </ul>
           </nav>
           <div className="space-y-2 border-t border-black/5 p-4">
-            <Link to="/login" className="btn btn-dark w-full" tabIndex={menuOpen ? 0 : -1}>Sign in</Link>
-            <Link to="/register" className="btn btn-outline w-full text-indigo-ink" tabIndex={menuOpen ? 0 : -1}>Create account</Link>
+            {user ? (
+              <>
+                <Link to="/orders" className="btn btn-dark w-full" tabIndex={menuOpen ? 0 : -1}>My orders</Link>
+                {isAdmin && <Link to="/admin" className="btn btn-outline w-full text-indigo-ink" tabIndex={menuOpen ? 0 : -1}>Admin dashboard</Link>}
+                <button onClick={logout} className="w-full py-2 text-sm font-semibold text-terracotta" tabIndex={menuOpen ? 0 : -1}>Sign out</button>
+              </>
+            ) : (
+              <>
+                <Link to="/login" className="btn btn-dark w-full" tabIndex={menuOpen ? 0 : -1}>Sign in</Link>
+                <Link to="/register" className="btn btn-outline w-full text-indigo-ink" tabIndex={menuOpen ? 0 : -1}>Create account</Link>
+              </>
+            )}
           </div>
         </aside>
       </div>
