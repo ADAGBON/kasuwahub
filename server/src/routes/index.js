@@ -1,4 +1,5 @@
 import { Router } from 'express'
+import mongoose from 'mongoose'
 import rateLimit from 'express-rate-limit'
 import { adminOnly, optionalAuth, protect } from '../middleware/auth.js'
 import * as auth from '../controllers/authController.js'
@@ -19,7 +20,10 @@ const authLimiter = rateLimit({
 })
 
 // Health & config
-router.get('/health', (_req, res) => res.json({ status: 'ok', time: new Date().toISOString() }))
+router.get('/health', (_req, res) => {
+  const db = mongoose.connection.readyState === 1 ? 'connected' : 'disconnected'
+  res.status(db === 'connected' ? 200 : 503).json({ status: db === 'connected' ? 'ok' : 'degraded', db, uptime: Math.round(process.uptime()), time: new Date().toISOString() })
+})
 router.get('/config', (_req, res) => res.json({ deliveryZones: Object.values(DELIVERY_ZONES), paystack: isPaystackEnabled() }))
 
 // Auth

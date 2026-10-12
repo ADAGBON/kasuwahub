@@ -2,7 +2,11 @@
 
 > Online marketplace for Lagos fashion & fabric sellers — Lab Phase project (draft)
 
-**Status:** ✅ Phase 1 (Front-end UI) · ✅ Phase 2 (Back end) · Phase 3 (Deployment) next
+[![CI](https://github.com/ADAGBON/kasuwahub/actions/workflows/ci.yml/badge.svg)](https://github.com/ADAGBON/kasuwahub/actions/workflows/ci.yml)
+
+**Status:** ✅ Phase 1 (Front-end UI) · ✅ Phase 2 (Back end) · 🚀 Phase 3 (Deployment & testing)
+
+**Live site:** _add your Netlify URL here_ · **API:** _add your Render URL here_/api/health
 
 ![KasuwaHub home page](docs/screenshots/desktop-home.png)
 
@@ -35,7 +39,7 @@ Many Lagos fashion and fabric businesses sell mainly through Instagram DMs and W
 | Auth | JWT, bcrypt |
 | Images | Cloudinary |
 | Payments | Paystack |
-| Hosting | Vercel (client), Render (API) |
+| Hosting | Netlify (client), Render (API), MongoDB Atlas (database) |
 
 ## Project Structure
 
@@ -56,8 +60,11 @@ kasuwahub/
 │   │   ├── middleware/   # JWT protect/adminOnly, error handler
 │   │   ├── routes/       # all /api routes
 │   │   └── seed/         # starter catalogue + admin account
+│   ├── scripts/          # smoke-test.js (live checks), set-admin-password.js
 │   └── tests/            # 31 end-to-end API tests
-├── docs/       # Wireframes, API spec, pitch deck
+├── docs/       # Screenshots, DEPLOYMENT.md
+├── render.yaml # Render blueprint for the API
+├── .github/workflows/ci.yml  # tests + build on every push
 └── README.md
 ```
 
@@ -67,7 +74,7 @@ kasuwahub/
 |---|---|---|
 | 1 | Front-end Development — UI Design | ✅ Done |
 | 2 | Back-end Development — API, auth, products, orders | ✅ Done |
-| 3 | Deployment & Testing | ⬜ Not started |
+| 3 | Deployment & Testing | 🚀 In progress |
 | 4 | Pitch & Presentation | ⬜ Not started |
 
 ## Phase 1 — Front-end UI
@@ -123,6 +130,17 @@ Cart is persisted in `localStorage`. Checkout, login and register show front-end
 |---|---|---|
 | ![](docs/screenshots/phase2/phone-checkout.png) | ![](docs/screenshots/phase2/phone-order.png) | ![](docs/screenshots/phase2/desktop-admin-orders.png) |
 
+## Phase 3 — Deployment & testing
+
+| Objective | What was done |
+|---|---|
+| **1. Hosting provider** | **Render** (free web service) for the Express API, **Netlify** (free) for the React site, **MongoDB Atlas** (M0 free) for the database. Heroku was not used because it no longer has a free plan |
+| **2. Server setup** | `render.yaml` blueprint: Node 22, `npm ci` build, `/api/health` health check (reports DB status), production env vars, auto-generated `JWT_SECRET`. API binds to `0.0.0.0:$PORT`, trusts Render's proxy, shuts down gracefully on redeploy, and only accepts browser requests from the live site (CORS via `CLIENT_URL`). `client/netlify.toml` sets the build, SPA redirects for deep links and long-term caching of assets |
+| **3. Deployment** | Push to `main` → Render and Netlify rebuild automatically. GitHub Actions (`.github/workflows/ci.yml`) runs the 31 API tests against a real MongoDB and builds the site on every push. Step-by-step guide: [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) |
+| **4. Testing** | `npm run smoke` runs **14 end-to-end checks against the live site and API**: health/DB, pages and deep links, API address in the build, CORS, catalogue/search/filters, register/login, access control, cart, checkout and payment, order history, admin product CRUD and order handling. Also a manual phone and laptop checklist. A "waking up the server" notice covers Render's free-tier cold starts |
+
+Production rehearsal before going live: the API ran with `NODE_ENV=production` and the built site on a separate origin. The smoke test passed 14/14, the full browser flow passed on phone and desktop, and the smoke test correctly caught a deliberately wrong CORS origin.
+
 ## Run locally
 
 You need Node.js 20+ and a MongoDB database (free [MongoDB Atlas](https://www.mongodb.com/atlas) cluster, or local MongoDB).
@@ -144,7 +162,7 @@ npm run dev              # http://localhost:5173 (proxies /api to :5000)
 
 Without `PAYSTACK_SECRET_KEY` the checkout uses a clearly labelled **test payment page**, so the whole order flow can be demonstrated. Add a Paystack **test** secret key to use real Paystack checkout, and set the webhook URL to `https://<your-api>/api/payments/webhook`.
 
-Deploy the client to Vercel with **Root Directory = `client`** (`vercel.json` handles client-side routes).
+Deployment: see [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) (Render + Netlify; `client/vercel.json` is also included if you prefer Vercel).
 
 ## Team
 
