@@ -6,7 +6,7 @@
 
 **Status:** ✅ Phase 1 (Front-end UI) · ✅ Phase 2 (Back end) · 🚀 Phase 3 (Deployment & testing)
 
-**Live site:** _add your Netlify URL here_ · **API:** _add your Render URL here_/api/health
+**Live site:** https://celadon-paprenjak-3d4cfd.netlify.app · **API:** https://kasuwahub-api.onrender.com/api/health
 
 ![KasuwaHub home page](docs/screenshots/desktop-home.png)
 
@@ -74,7 +74,7 @@ kasuwahub/
 |---|---|---|
 | 1 | Front-end Development — UI Design | ✅ Done |
 | 2 | Back-end Development — API, auth, products, orders | ✅ Done |
-| 3 | Deployment & Testing | 🚀 In progress |
+| 3 | Deployment & Testing | ✅ Done |
 | 4 | Pitch & Presentation | ⬜ Not started |
 
 ## Phase 1 — Front-end UI
